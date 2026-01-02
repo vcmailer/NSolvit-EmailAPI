@@ -10,5 +10,6 @@
   "preview_urls": false,
   "assets": {
     "directory": "./"
-  } 
+  },
+  "main": "src/index.ts"
 }
