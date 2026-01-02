@@ -5,7 +5,7 @@
 //     should change “compatibility_date” to the date last deployed.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "nsolvitprodemail",
+  "name": "nsolvitemailapi",
   "compatibility_date": "2025-10-13",
   "preview_urls": false,
   "assets": {
