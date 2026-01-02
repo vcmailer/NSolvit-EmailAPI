@@ -1,91 +1,71 @@
 export default {
   async fetch(request, env) {
-    // 1. ALLOW ALL ORIGINS (Fixes the immediate blocking issue)
+    // 1. LOGGING: This proves the new code is running
+    console.log("DEBUG: Handling request method:", request.method);
+
+    // 2. HEADERS: Allow everyone (*) to fix the blocking issue immediately
     const corsHeaders = {
-      "Access-Control-Allow-Origin": "*", 
+      "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     };
 
-    // 2. Handle Preflight (Browser Safety Check)
+    // 3. PREFLIGHT: Handle the browser check
     if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders });
+      console.log("DEBUG: Returning 204 for OPTIONS");
+      return new Response(null, {
+        status: 204, // The log MUST show 204, not 200
+        headers: corsHeaders
+      });
     }
 
     try {
-      // 3. Check for Environment Variables (Prevents invisible crashes)
-      if (!env.MAILERSEND_API_KEY || !env.RECAPTCHA_SECRET_KEY) {
-        throw new Error("Server Configuration Error: Missing API Keys in Cloudflare Settings");
-      }
-
-      // 4. Validate Request Method
       if (request.method !== "POST") {
-        throw new Error("Method Not Allowed");
+        return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
       }
 
-      // 5. Parse Data
-      let body;
-      try {
-        body = await request.json();
-      } catch (e) {
-        throw new Error("Invalid JSON data received");
-      }
-
+      // 4. PARSE DATA
+      const body = await request.json();
       const { firstName, lastName, email, subject, message, recaptchaToken } = body;
 
-      if (!firstName || !lastName || !email || !subject || !message || !recaptchaToken) {
-        throw new Error("All fields are required");
-      }
+      if (!env.RECAPTCHA_SECRET_KEY) throw new Error("Missing RECAPTCHA_SECRET_KEY variable");
+      if (!env.MAILERSEND_API_KEY) throw new Error("Missing MAILERSEND_API_KEY variable");
 
-      // 6. Verify Recaptcha
+      // 5. VERIFY RECAPTCHA
       const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: `secret=${env.RECAPTCHA_SECRET_KEY}&response=${recaptchaToken}`,
       });
       const verifyData = await verifyRes.json();
-      if (!verifyData.success) {
-        throw new Error("reCAPTCHA verification failed");
-      }
+      if (!verifyData.success) throw new Error("reCAPTCHA failed");
 
-      // 7. Send Email
-      const emailContent = {
-        from: { email: "no-reply@nsolvit.com", name: "NSolvit Website" },
-        to: [{ email: "vcmailerpro@gmail.com", name: "NSolvit Admin" }],
-        subject: `New Lead: ${subject}`,
-        html: `
-          <h3>New Website Submission</h3>
-          <p><strong>Name:</strong> ${firstName} ${lastName}</p>
-          <p><strong>Email:</strong> <a href="mailto:${email}">${email}</a></p>
-          <p><strong>Subject:</strong> ${subject}</p>
-          <hr/>
-          <p>${message}</p>
-        `,
-      };
-
-      const mailRes = await fetch("https://api.mailersend.com/v1/email", {
+      // 6. SEND EMAIL
+      const emailRes = await fetch("https://api.mailersend.com/v1/email", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${env.MAILERSEND_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(emailContent),
+        body: JSON.stringify({
+          from: { email: "no-reply@nsolvit.com", name: "NSolvit Form" },
+          to: [{ email: "vcmailerpro@gmail.com", name: "Admin" }],
+          subject: `New Contact: ${subject}`,
+          text: `Name: ${firstName} ${lastName}\nEmail: ${email}\n\n${message}`,
+        }),
       });
 
-      if (!mailRes.ok) {
-        const errText = await mailRes.text();
-        throw new Error(`Email Provider Error: ${errText}`);
-      }
+      if (!emailRes.ok) throw new Error(await emailRes.text());
 
-      // 8. SUCCESS RESPONSE
-      return new Response(JSON.stringify({ success: true, message: "Email sent successfully" }), {
+      // 7. SUCCESS
+      return new Response(JSON.stringify({ success: true }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
 
     } catch (err) {
-      // 9. ERROR RESPONSE (With CORS headers, so the browser can see the error)
-      return new Response(JSON.stringify({ success: false, error: err.message }), {
+      console.error("DEBUG Error:", err.message);
+      return new Response(JSON.stringify({ error: err.message }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
