@@ -11,5 +11,5 @@
   "assets": {
     "directory": "./"
   },
-  "main": "src/index.ts"
+  "main": "index.ts"
 }
