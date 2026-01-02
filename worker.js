@@ -1,101 +1,94 @@
 export default {
   async fetch(request, env) {
-    // 1. Define CORS headers explicitly for your domain
+    // 1. ALLOW ALL ORIGINS (Fixes the immediate blocking issue)
     const corsHeaders = {
-      'Access-Control-Allow-Origin': 'https://nsolvit.com', // Explicit domain is safer than '*'
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      "Access-Control-Allow-Origin": "*", 
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
     };
 
-    // 2. Handle the "Preflight" check immediately
-    if (request.method === 'OPTIONS') {
+    // 2. Handle Preflight (Browser Safety Check)
+    if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
 
-    // 3. Wrap EVERYTHING in a try/catch to ensure headers are always sent
     try {
-      if (request.method !== 'POST') {
-        throw new Error('Method Not Allowed');
+      // 3. Check for Environment Variables (Prevents invisible crashes)
+      if (!env.MAILERSEND_API_KEY || !env.RECAPTCHA_SECRET_KEY) {
+        throw new Error("Server Configuration Error: Missing API Keys in Cloudflare Settings");
       }
 
+      // 4. Validate Request Method
+      if (request.method !== "POST") {
+        throw new Error("Method Not Allowed");
+      }
+
+      // 5. Parse Data
       let body;
       try {
         body = await request.json();
-      } catch {
-        throw new Error('Invalid JSON body');
+      } catch (e) {
+        throw new Error("Invalid JSON data received");
       }
 
       const { firstName, lastName, email, subject, message, recaptchaToken } = body;
 
       if (!firstName || !lastName || !email || !subject || !message || !recaptchaToken) {
-        throw new Error('All fields and reCAPTCHA are required');
+        throw new Error("All fields are required");
       }
 
-      // --- Verify reCAPTCHA ---
-      const verifyRes = await fetch(`https://www.google.com/recaptcha/api/siteverify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `secret=${env.RECAPTCHA_SECRET_KEY}&response=${recaptchaToken}`
+      // 6. Verify Recaptcha
+      const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `secret=${env.RECAPTCHA_SECRET_KEY}&response=${recaptchaToken}`,
       });
       const verifyData = await verifyRes.json();
-      
       if (!verifyData.success) {
-        throw new Error('reCAPTCHA verification failed');
+        throw new Error("reCAPTCHA verification failed");
       }
 
-      // --- Prepare Email Content ---
-      // FIXED TYPO: vcmailerpro@gmail@gmail.com -> vcmailerpro@gmail.com
+      // 7. Send Email
       const emailContent = {
-        from: { email: 'no-reply@nsolvit.com', name: 'NSolvit Website Form' },
-        to: [{ email: 'vcmailerpro@gmail.com', name: 'NSolvit' }], 
-        subject: `New message: ${subject}`,
+        from: { email: "no-reply@nsolvit.com", name: "NSolvit Website" },
+        to: [{ email: "vcmailerpro@gmail.com", name: "NSolvit Admin" }],
+        subject: `New Lead: ${subject}`,
         html: `
-          <html>
-            <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.5;">
-              <div style="background-color: #f7f7f7; padding: 20px; text-align: center;">
-                <h2 style="margin: 0; color: #333;">New Contact Form Submission</h2>
-              </div>
-              <div style="padding: 20px;">
-                <p><strong>From:</strong> ${firstName} ${lastName} (<a href="mailto:${email}">${email}</a>)</p>
-                <p><strong>Subject:</strong> ${subject}</p>
-                <p><strong>Message:</strong></p>
-                <div style="background-color: #f0f0f0; padding: 15px; border-radius: 4px;">${message}</div>
-              </div>
-            </body>
-          </html>
+          <h3>New Website Submission</h3>
+          <p><strong>Name:</strong> ${firstName} ${lastName}</p>
+          <p><strong>Email:</strong> <a href="mailto:${email}">${email}</a></p>
+          <p><strong>Subject:</strong> ${subject}</p>
+          <hr/>
+          <p>${message}</p>
         `,
-        text: `${firstName} ${lastName} (${email})\n\nSubject: ${subject}\n\n${message}`
       };
 
-      // --- Send via MailerSend ---
-      const mailRes = await fetch('https://api.mailersend.com/v1/email', {
-        method: 'POST',
+      const mailRes = await fetch("https://api.mailersend.com/v1/email", {
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${env.MAILERSEND_API_KEY}`,
-          'Content-Type': 'application/json',
+          "Authorization": `Bearer ${env.MAILERSEND_API_KEY}`,
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(emailContent)
+        body: JSON.stringify(emailContent),
       });
 
       if (!mailRes.ok) {
-        const errorText = await mailRes.text();
-        console.error('MailerSend Error:', errorText);
-        throw new Error('Failed to send email via MailerSend provider');
+        const errText = await mailRes.text();
+        throw new Error(`Email Provider Error: ${errText}`);
       }
 
-      // Success Response
-      return new Response(JSON.stringify({ success: true }), {
+      // 8. SUCCESS RESPONSE
+      return new Response(JSON.stringify({ success: true, message: "Email sent successfully" }), {
         status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
 
     } catch (err) {
-      // 4. GLOBAL ERROR CATCHER - Ensures CORS headers are present even on crash
-      console.error('Worker Error:', err.message);
+      // 9. ERROR RESPONSE (With CORS headers, so the browser can see the error)
       return new Response(JSON.stringify({ success: false, error: err.message }), {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-  }
+  },
 };
