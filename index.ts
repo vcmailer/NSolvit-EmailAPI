@@ -51,13 +51,21 @@ export default {
           from: { email: "no-reply@nsolvit.com", name: "NSolvit Form" },
           to: [{ email: "vcmailerpro@gmail.com", name: "Admin" }],
           subject: `New Lead: ${subject}`,
+          // ADDITION 1: Plain text version (Required by some clients/filters)
+          text: `New Contact\n\nName: ${firstName} ${lastName}\nEmail: ${email}\nSubject: ${subject}\n\nMessage:\n${message}`,
+          // ADDITION 2: Full HTML structure
           html: `
-            <h3>New Contact</h3>
-            <p><strong>Name:</strong> ${firstName} ${lastName}</p>
-            <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Subject:</strong> ${subject}</p>
-            <hr/>
-            <p>${message}</p>
+            <!DOCTYPE html>
+            <html>
+            <body>
+              <h3>New Contact</h3>
+              <p><strong>Name:</strong> ${firstName} ${lastName}</p>
+              <p><strong>Email:</strong> ${email}</p>
+              <p><strong>Subject:</strong> ${subject}</p>
+              <hr/>
+              <p>${message}</p>
+            </body>
+            </html>
           `,
         }),
       });
