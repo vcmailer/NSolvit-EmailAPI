@@ -50,7 +50,7 @@ export default {
         body: JSON.stringify({
           from: { email: "no-reply@nsolvit.com", name: "NSolvit Form" },
           to: [{ email: "vcmailerpro@gmail.com", name: "Admin" }],
-          subject: `New Lead: ${subject}`,
+          subject: `Action Required: New Inquiry from ${firstName}: ${subject}`,
           // ADDITION 1: Plain text version (Required by some clients/filters)
           text: `New Contact\n\nName: ${firstName} ${lastName}\nEmail: ${email}\nSubject: ${subject}\n\nMessage:\n${message}`,
           // ADDITION 2: Full HTML structure
