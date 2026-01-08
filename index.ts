@@ -25,7 +25,14 @@ export default {
         throw new Error("Invalid JSON data");
       }
 
+      // ✅ ADD THE SAFETY CHECK HERE
       const { firstName, lastName, email, subject, message, recaptchaToken } = body;
+
+          // Safety check: stop blank emails
+          if (!firstName?.trim() || !email?.trim() || !subject?.trim() || !message?.trim()) {
+            throw new Error("Missing required fields");
+          }
+
 
       // 4. CHECK VARIABLES
       if (!env.RECAPTCHA_SECRET_KEY) throw new Error("Missing RECAPTCHA_SECRET_KEY");
